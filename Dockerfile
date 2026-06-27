@@ -12,11 +12,6 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
       -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
-# Deno — yt-dlp's recommended JS runtime for YouTube signature/nsig handling.
-# Captions don't strictly need it, but it future-proofs YouTube extraction.
-RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
-    && /usr/local/bin/deno --version | head -1
-
 WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
