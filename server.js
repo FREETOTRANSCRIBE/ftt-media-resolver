@@ -19,7 +19,7 @@
 
 import express from 'express';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -115,7 +115,14 @@ async function resolveYouTubeCaptions(url, lang, dir) {
 async function resolveAudio(url, uploadUrl, dir) {
   const outM4a = join(dir, 'audio.m4a');
   // Instagram needs a logged-in cookie session; harmless for TikTok.
-  const cookieArgs = COOKIES_FILE ? ['--cookies', COOKIES_FILE] : [];
+  // yt-dlp writes the cookie jar back after use, so we hand it a WRITABLE copy
+  // (the Render secret file is mounted read-only — writing to it crashes yt-dlp).
+  let cookieArgs = [];
+  if (COOKIES_FILE) {
+    const cookieCopy = join(dir, 'cookies.txt');
+    try { await copyFile(COOKIES_FILE, cookieCopy); cookieArgs = ['--cookies', cookieCopy]; }
+    catch (e) { console.warn('[resolve] cookie copy failed:', e.message); }
+  }
   await run(YTDLP_BIN, [
     '--no-playlist', '--no-warnings', '--no-progress',
     ...cookieArgs,
