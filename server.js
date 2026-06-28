@@ -126,10 +126,23 @@ async function resolveYouTubeCaptions(url, lang, dir) {
 
 async function resolveAudio(url, uploadUrl, dir) {
   const outM4a = join(dir, 'audio.m4a');
-  // Instagram needs a logged-in cookie session; harmless for TikTok.
+  // Instagram needs a logged-in cookie session; harmless for TikTok. Compute the
+  // cookie args once and reuse for both the duration probe and the download.
+  const ca = await cookieArgs(dir);
+
+  // 1) DURATION GATE — cheap metadata-only probe (no media download). Reject
+  //    videos longer than the 60-min limit BEFORE downloading anything. A 0/unknown
+  //    duration is allowed through (the -t cap + size check below are the safety net).
+  const probeStr = await runCapture(YTDLP_BIN,
+    ['--no-warnings', '--no-playlist', '--skip-download', '--print', '%(duration)s', ...ca, url], 30000);
+  const probedSeconds = Math.round(parseFloat(probeStr) || 0);
+  if (probedSeconds > MAX_SECONDS) { const e = new Error('too_long'); e.code = 'too_long'; throw e; }
+
+  // 2) Download bestaudio and transcode to small mono m4a (also hard-capped at
+  //    MAX_SECONDS via ffmpeg -t, as a belt-and-braces limit).
   await run(YTDLP_BIN, [
     '--no-playlist', '--no-warnings', '--no-progress',
-    ...(await cookieArgs(dir)),
+    ...ca,
     '-f', 'bestaudio/best',
     '-x', '--audio-format', 'm4a',
     '--postprocessor-args', `FFmpegExtractAudio:-ac 1 -b:a 48k -t ${MAX_SECONDS}`,
@@ -187,6 +200,7 @@ app.post('/resolve', async (req, res) => {
     const code = e.code || '';
     const msg  = String(e.message || e);
     if (code === 'no_captions')  return res.status(422).json({ error: 'no_captions' });
+    if (code === 'too_long')     return res.status(413).json({ error: 'too_long' });
     if (code === 'too_large')    return res.status(413).json({ error: 'too_large' });
     if (code === 'upload_failed')return res.status(502).json({ error: 'upload_failed' });
     if (msg === 'timeout')       return res.status(504).json({ error: 'resolve_timeout', detail: 'timeout' });
