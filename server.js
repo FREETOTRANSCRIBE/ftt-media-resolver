@@ -85,10 +85,22 @@ function subLangs(lang) {
   return `${l},en`; // requested language, English fallback
 }
 
+// yt-dlp writes the cookie jar back after use, so hand it a WRITABLE copy
+// (the Render secret file is mounted read-only). Returns the --cookies args, or [].
+// One combined cookies.txt covers Instagram (audio path) AND YouTube (captions).
+async function cookieArgs(dir) {
+  if (!COOKIES_FILE) return [];
+  const copy = join(dir, 'cookies.txt');
+  try { await copyFile(COOKIES_FILE, copy); return ['--cookies', copy]; }
+  catch (e) { console.warn('[resolve] cookie copy failed:', e.message); return []; }
+}
+
 async function resolveYouTubeCaptions(url, lang, dir) {
   // Fetch captions + metadata only — no media download, no JS runtime needed.
+  // YouTube bot-checks datacenter IPs, so cookies (burner Google account) are needed.
   await run(YTDLP_BIN, [
     '--no-playlist', '--no-warnings', '--no-progress', '--skip-download',
+    ...(await cookieArgs(dir)),
     '--write-subs', '--write-auto-subs', '--write-info-json',
     '--sub-langs', subLangs(lang), '--sub-format', 'srt/best', '--convert-subs', 'srt',
     '-o', join(dir, 'cap.%(ext)s'),
@@ -115,17 +127,9 @@ async function resolveYouTubeCaptions(url, lang, dir) {
 async function resolveAudio(url, uploadUrl, dir) {
   const outM4a = join(dir, 'audio.m4a');
   // Instagram needs a logged-in cookie session; harmless for TikTok.
-  // yt-dlp writes the cookie jar back after use, so we hand it a WRITABLE copy
-  // (the Render secret file is mounted read-only — writing to it crashes yt-dlp).
-  let cookieArgs = [];
-  if (COOKIES_FILE) {
-    const cookieCopy = join(dir, 'cookies.txt');
-    try { await copyFile(COOKIES_FILE, cookieCopy); cookieArgs = ['--cookies', cookieCopy]; }
-    catch (e) { console.warn('[resolve] cookie copy failed:', e.message); }
-  }
   await run(YTDLP_BIN, [
     '--no-playlist', '--no-warnings', '--no-progress',
-    ...cookieArgs,
+    ...(await cookieArgs(dir)),
     '-f', 'bestaudio/best',
     '-x', '--audio-format', 'm4a',
     '--postprocessor-args', `FFmpegExtractAudio:-ac 1 -b:a 48k -t ${MAX_SECONDS}`,
