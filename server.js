@@ -115,7 +115,6 @@ async function resolveAudio(url, uploadUrl, dir) {
     '-f', 'bestaudio/best',
     '-x', '--audio-format', 'm4a',
     '--postprocessor-args', `FFmpegExtractAudio:-ac 1 -b:a 48k -t ${MAX_SECONDS}`,
-    '--ffmpeg-location', FFMPEG_BIN,
     '-o', join(dir, 'audio.%(ext)s'),
     url,
   ], JOB_TIMEOUT_MS);
@@ -172,12 +171,12 @@ app.post('/resolve', async (req, res) => {
     if (code === 'no_captions')  return res.status(422).json({ error: 'no_captions' });
     if (code === 'too_large')    return res.status(413).json({ error: 'too_large' });
     if (code === 'upload_failed')return res.status(502).json({ error: 'upload_failed' });
-    if (msg === 'timeout')       return res.status(504).json({ error: 'resolve_timeout' });
+    if (msg === 'timeout')       return res.status(504).json({ error: 'resolve_timeout', detail: 'timeout' });
     if (/private|login|unavailable|not available|removed|sign in|404/i.test(msg)) {
-      return res.status(422).json({ error: 'unavailable' });
+      return res.status(422).json({ error: 'unavailable', detail: msg.slice(0, 400) });
     }
     console.error('[resolve] failed:', msg);
-    return res.status(502).json({ error: 'resolve_failed' });
+    return res.status(502).json({ error: 'resolve_failed', detail: msg.slice(0, 400) });
   } finally {
     if (dir) rm(dir, { recursive: true, force: true }).catch(() => {});
   }
