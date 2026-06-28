@@ -28,6 +28,10 @@ const RESOLVER_SECRET = process.env.RESOLVER_SECRET || '';
 const YTDLP_BIN       = process.env.YTDLP_BIN   || 'yt-dlp';
 const FFMPEG_BIN      = process.env.FFMPEG_BIN  || 'ffmpeg';
 const FFPROBE_BIN     = process.env.FFPROBE_BIN || 'ffprobe';
+// Path to a Netscape-format cookies.txt from a logged-in (throwaway) Instagram
+// account. Instagram returns empty media to unauthenticated/datacenter requests,
+// so reels need these cookies. Set on Render as a Secret File mounted here.
+const COOKIES_FILE    = process.env.IG_COOKIES_FILE || '';
 
 const MAX_BYTES       = 25 * 1024 * 1024;   // matches the existing 25MB pipeline cap
 const MAX_SECONDS     = 3600;               // 60 min cap (matches free daily limit)
@@ -110,8 +114,11 @@ async function resolveYouTubeCaptions(url, lang, dir) {
 
 async function resolveAudio(url, uploadUrl, dir) {
   const outM4a = join(dir, 'audio.m4a');
+  // Instagram needs a logged-in cookie session; harmless for TikTok.
+  const cookieArgs = COOKIES_FILE ? ['--cookies', COOKIES_FILE] : [];
   await run(YTDLP_BIN, [
     '--no-playlist', '--no-warnings', '--no-progress',
+    ...cookieArgs,
     '-f', 'bestaudio/best',
     '-x', '--audio-format', 'm4a',
     '--postprocessor-args', `FFmpegExtractAudio:-ac 1 -b:a 48k -t ${MAX_SECONDS}`,
