@@ -1,0 +1,27 @@
+name: SEO Audit
+
+# Runs the FreeToTranscribe SEO self-audit against the live site.
+# - Scheduled daily; also runnable on demand from the Actions tab.
+# - The job FAILS (red X) when the audit finds issues, because
+#   seo-audit.py exits non-zero. GitHub then emails the repo owner
+#   automatically — that email IS the alert.
+
+on:
+  schedule:
+    - cron: "13 8 * * *"   # every day at 08:13 UTC
+  workflow_dispatch:        # manual "Run workflow" button
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run SEO audit against live site
+        run: python3 seo-audit.py
